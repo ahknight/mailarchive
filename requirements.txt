@@ -1,0 +1,3 @@
+-e git+https://github.com/ahknight/maildir-lite.git#egg=maildir-lite
+-e git+https://github.com/ahknight/python-emlx.git#egg=emlx
+-e git+https://github.com/ahknight/simplekvs.git#egg=simplekvs

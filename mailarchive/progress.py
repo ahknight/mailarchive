@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # 2013-12-29 AK Fetched from http://www.casualhacker.net/progress/progress.py
 # 2013-12-29 AK Ported to Python 3 via the 2to3 script, which worked admirably.
 

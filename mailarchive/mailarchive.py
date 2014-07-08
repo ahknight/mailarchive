@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import logging
 import os                      # path
 from datetime import datetime  # now()
@@ -7,7 +5,7 @@ from datetime import datetime  # now()
 from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
 
 from maildir_lite import Maildir
-from kvs import SQLiteStore
+from simplekvs import SQLiteStore
 
 log = logging.getLogger(__name__)
 

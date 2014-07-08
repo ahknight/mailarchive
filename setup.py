@@ -1,4 +1,6 @@
-from setuptools import setup #, find_packages
+#!/usr/bin/env python
+
+from setuptools import setup, find_packages
 
 setup(
     name="mailarchive",
@@ -49,12 +51,15 @@ setup(
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages.
-    # packages=find_packages(exclude=["contrib", "docs", "tests*"]),
-    packages = [ "mailarchive" ],
+    packages=find_packages(exclude=["contrib", "docs", "tests*"]),
 
     # List run-time dependencies here.  These will be installed by pip when your
     # project is installed.
-    # install_requires = ['peppercorn'],
+    install_requires = [
+        # '-e git@github.com:ahknight/maildir-lite.git#egg=maildir-lite',
+        # '-e git@github.com:ahknight/python-emlx.git#egg=emlx',
+        # '-e git@github.com:ahknight/simplekvs.git#egg=simplekvs',
+    ],
 
     # If there are data files included in your packages that need to be
     # installed, specify them here.  If using Python 2.6 or less, then these

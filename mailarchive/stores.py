@@ -1,7 +1,6 @@
-#!/usr/bin/env python
-
 import os
 from errno import *
+
 
 class Store(object):
     '''
@@ -46,6 +45,7 @@ class Store(object):
     def keys(self):
         return []
 
+
 import dbm.ndbm as dbm
 class DBMStore(Store):
     ext = ".db"
@@ -70,6 +70,7 @@ class DBMStore(Store):
     
     def values(self):
         return self.db.values()
+
 
 import sqlite3
 class SQLStore(Store):
@@ -122,6 +123,7 @@ class SQLStore(Store):
             result = c.fetchall()
             result = [x[0] for x in result] #unpack from per-row
             return result
+
 
 class SymStore(Store):
     """

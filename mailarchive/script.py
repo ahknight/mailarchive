@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os                   # path
 import sys                  # stdout, argv, exit
 import time                 # sleep
@@ -11,9 +9,10 @@ from getopt import getopt, GetoptError      # getopt, GetoptError
 import multiprocessing as multiprocessing
 
 from maildir_lite import Maildir, InvalidMaildirError
-from mailarchive import MailArchive, MailArchiveRecord
-from progress import Progress
-from outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
+
+from .mailarchive import MailArchive, MailArchiveRecord
+from .progress import Progress
+from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
 
 def worker_init(*args):
     '''
