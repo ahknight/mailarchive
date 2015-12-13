@@ -6,7 +6,7 @@ import logging
 from getopt import getopt, GetoptError      # getopt, GetoptError
 
 # PIXIE SPARKLE MAGIC DUST
-import multiprocessing as multiprocessing
+import multiprocessing.pool as multiprocessing
 
 from maildir_lite import Maildir, InvalidMaildirError
 
@@ -188,7 +188,7 @@ def main(argc, argv):
         logging.debug("* Path expanded to %r", path)
         
         try:
-            maildir = Maildir(path)
+            maildir = Maildir(path, xattr=True)
             maildir_paths.append(path)
             logging.info("+ added folder %s" % (maildir.name,))
             

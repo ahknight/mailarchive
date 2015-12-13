@@ -6,6 +6,7 @@ from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED,
 
 from maildir_lite import Maildir
 from simplekvs import SQLiteStore
+# from .stores import SQLStore as SQLiteStore
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class MailArchive(object):
         self.maildir = Maildir(path, create=create, lazy=lazy)
         self.folders = {folder: self.maildir.get_folder(folder) for folder in self.maildir.list_folders()}
         
-        storepath = os.path.join(path, "archive")
+        storepath = os.path.join(path, "archive.db")
         self.store = SQLiteStore(storepath)
         
     def __getitem__(self, msg):
@@ -105,7 +106,7 @@ class MailArchive(object):
                 
                 elif not (headers['Delivered-To'] or headers['Received']):
                     # Sent or received?
-                    foldername += "/Sent Messages"
+                    foldername += "/Sent"
         
         # Create and cache the folder if it doesn't exist.
         if not foldername in self.folders:
