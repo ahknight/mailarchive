@@ -63,6 +63,9 @@ class StandardOutput(object):
         self.total = total
         self.progress = Progress(total)
         
+        if len(name) > 40:
+            self.name = name[0:19] + "…" + name[-20:]
+        
         try:
             import curses
             curses.setupterm()

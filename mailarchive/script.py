@@ -19,9 +19,9 @@ def worker_init(*args):
     Creates some process-specific globals for speed and to avoid concurrency issues.
     '''
     global archive, dry_run
-    archive_path, dry_run = args
+    archive_path, dry_run, fs_layout = args
 
-    archive = MailArchive(archive_path, lazy=True)
+    archive = MailArchive(archive_path, lazy=True, fs_layout=fs_layout)
     # archive.maildir.lazy_period = 10
 
 def process_message(args):
@@ -73,6 +73,7 @@ def main(argc, argv):
     CHECK_ARCHIVE = False
     DRY_RUN = False
     RECURSIVE = False
+    USE_FS_LAYOUT = False
     
     USER_MAILDIR = None
     if os.getenv("MAILDIR"):
@@ -105,6 +106,7 @@ def main(argc, argv):
         ("f",   "fsck",         False,  "Verify the archive and repair any issues.\n"),
         
         ("c",   "chunk-size",   True,   "Minimum size of a work unit (advanced; default: %d)." % CHUNK_SIZE),
+        ("l",   "fs",           False,  "Use FS layout for archive subfolders instead of Maildir++"),
     )
     
     # Build long and short argument ... arguments.
@@ -173,6 +175,10 @@ def main(argc, argv):
             if CHUNK_SIZE < 1: CHUNK_SIZE = 1
             logging.debug("CHUNK_SIZE %r", CHUNK_SIZE)
             
+        elif option in ["--fs"]:
+            USE_FS_LAYOUT = True
+            logging.debug("USE_FS_LAYOUT %d", USE_FS_LAYOUT)
+            
         elif option in ["-h", "--help"]:
             logging.debug("HELP")
             print(help_text)
@@ -188,7 +194,7 @@ def main(argc, argv):
         logging.debug("* Path expanded to %r", path)
         
         try:
-            maildir = Maildir(path, xattr=True)
+            maildir = Maildir(path, xattr=True, fs_layout=USE_FS_LAYOUT)
             maildir_paths.append(path)
             logging.info("+ added folder %s" % (maildir.name,))
             
@@ -203,7 +209,7 @@ def main(argc, argv):
             continue;
             
     # Create the archive maildir and get the direct path to it
-    maildir = Maildir(USER_MAILDIR, create=True)
+    maildir = Maildir(USER_MAILDIR, create=True, fs_layout=USE_FS_LAYOUT)
     ARCHIVE_PATH = maildir.create_folder(ARCHIVE_FOLDER).path
     # print(maildir.path)
     # print(ARCHIVE_FOLDER)
@@ -211,7 +217,7 @@ def main(argc, argv):
     del maildir
     
     # Verify the DB before starting
-    archive = MailArchive(ARCHIVE_PATH, create=True)
+    archive = MailArchive(ARCHIVE_PATH, create=True, fs_layout=USE_FS_LAYOUT)
     if CHECK_ARCHIVE:
         archive.check(True)
     del archive
@@ -228,7 +234,7 @@ def main(argc, argv):
         logging.debug("* Opening %r", path)
         
         # Open the maildir
-        source = Maildir(path, lazy=True)
+        source = Maildir(path, lazy=True, fs_layout=USE_FS_LAYOUT)
         
         # Gather list of messages to check.
         msgids = sorted(source.keys())
@@ -242,7 +248,7 @@ def main(argc, argv):
             CHUNK_SIZE = max(CHUNK_SIZE, int(msgcount/256))
             
             if MULTIPROCESSING:
-                with multiprocessing.Pool(initializer=worker_init, initargs=(ARCHIVE_PATH, DRY_RUN)) as pool:
+                with multiprocessing.Pool(initializer=worker_init, initargs=(ARCHIVE_PATH, DRY_RUN, USE_FS_LAYOUT)) as pool:
                     imap_results = pool.imap(process_message, imap_args, chunksize=CHUNK_SIZE)
                     
                     for result in imap_results:
@@ -259,7 +265,7 @@ def main(argc, argv):
                     
                     del imap_args, imap_results
             else:
-                worker_init(ARCHIVE_PATH, DRY_RUN)
+                worker_init(ARCHIVE_PATH, DRY_RUN, USE_FS_LAYOUT)
                 for args in imap_args:
                     msgid, mark = process_message(args)
                     output.increment(mark)

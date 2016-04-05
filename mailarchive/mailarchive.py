@@ -5,8 +5,8 @@ from datetime import datetime  # now()
 from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
 
 from maildir_lite import Maildir
-from simplekvs import SQLiteStore
-# from .stores import SQLStore as SQLiteStore
+#from simplekvs import SQLiteStore as kvs
+from simplekvs import SQLAlchemyStore as kvs
 
 log = logging.getLogger(__name__)
 
@@ -59,12 +59,12 @@ class MailArchive(object):
     maildir = None
     store = None
     
-    def __init__(self, path, create=True, lazy=False):
-        self.maildir = Maildir(path, create=create, lazy=lazy)
+    def __init__(self, path, create=True, lazy=False, fs_layout=False):
+        self.maildir = Maildir(path, create=create, lazy=lazy, fs_layout=fs_layout)
         self.folders = {folder: self.maildir.get_folder(folder) for folder in self.maildir.list_folders()}
         
         storepath = os.path.join(path, "archive.db")
-        self.store = SQLiteStore(storepath)
+        self.store = kvs(storepath)
         
     def __getitem__(self, msg):
         key = msg.content_hash
