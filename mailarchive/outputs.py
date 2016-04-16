@@ -132,4 +132,4 @@ class StandardOutput(object):
                 end = "\r"
             
             print(self.clreol, end="")
-            print("%-40s  %3d%%  %8d  %7.1fm/s  %s" % (self.name, pct, self.count, mps, eta), end=end, flush=True)
+            print("%-30s  %3d%%  %8d  %7.1fm/s  %s" % (self.name, pct, self.count, mps, eta), end=end, flush=True)

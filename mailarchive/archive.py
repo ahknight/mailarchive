@@ -5,8 +5,8 @@ from datetime import datetime  # now()
 from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
 
 from maildir_lite import Maildir
-#from simplekvs import SQLiteStore as kvs
-from simplekvs import SQLAlchemyStore as kvs
+from simplekvs import SQLiteStore as kvs
+# from simplekvs import SQLAlchemyStore as kvs
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class MailArchive(object):
     store = None
     
     def __init__(self, path, create=True, lazy=False, fs_layout=False):
-        self.maildir = Maildir(path, create=create, lazy=lazy, fs_layout=fs_layout)
+        self.maildir = Maildir(path, create=create, lazy=lazy, xattr=True, fs_layout=fs_layout)
         self.folders = {folder: self.maildir.get_folder(folder) for folder in self.maildir.list_folders()}
         
         storepath = os.path.join(path, "archive.db")
@@ -236,7 +236,7 @@ class MailArchive(object):
                                 update = True
                                         
                             # Verify that the date is later than the earliest known date.
-                            if msg.mtime < record.mtime:
+                            if msg.mtime <= record.mtime:
                                 log.debug("invalid mtime: %s", record.msgid)
                                 errors.append( (record.msgid, "invalid mtime") )
                                 record.mtime = msg.mtime

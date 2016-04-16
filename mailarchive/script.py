@@ -1,64 +1,27 @@
+#!/usr/bin/env python3
+
 import os                   # path
 import sys                  # stdout, argv, exit
 import time                 # sleep
 import logging
-
-from getopt import getopt, GetoptError      # getopt, GetoptError
-
-# PIXIE SPARKLE MAGIC DUST
-import multiprocessing.pool as multiprocessing
+import argparse
 
 from maildir_lite import Maildir, InvalidMaildirError
 
-from .mailarchive import MailArchive, MailArchiveRecord
-from .progress import Progress
-from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
+#from .archive import MailArchive, MailArchiveRecord
+#from .progress import Progress
+#from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
+from mailarchive import *
 
-def worker_init(*args):
-    '''
-    Creates some process-specific globals for speed and to avoid concurrency issues.
-    '''
-    global archive, dry_run
-    archive_path, dry_run, fs_layout = args
-
-    archive = MailArchive(archive_path, lazy=True, fs_layout=fs_layout)
-    # archive.maildir.lazy_period = 10
-
-def process_message(args):
-    '''
-    Process a single message.  Expects to be run on a Process spawned from a Pool where worker_init has been run.
-    Returns EXISTING, ADDED, or UPDATED as appropriate to the action taken on the message.
-    '''
-    global archive, dry_run
-    
-    result = EXISTING
-    
-    maildir, msgid = args
-    msg = maildir[msgid]
-    
-    try:
-        record = archive[msg]
-        if record.should_update(msg):
-            if dry_run:
-                result = UPDATED
-            else:
-                result = archive.update_message(msg)
-    except KeyError:
-        if dry_run:
-            result = ADDED
-        else:
-            result = archive.add_message(msg)
-    
-    return (msg.msgid, result)
 
 def clean_path(path):
-    path = os.path.expanduser(path)
-    path = os.path.normpath(path)
-    path = os.path.realpath(path)
+    path = os.path.expanduser(path) # Expand the ~ token.
+    path = os.path.normpath(path)   # Remove redundant parts: ./././/.
+    path = os.path.realpath(path)   # Resolve symlinks and return cannonical path
     return path
 
 def main(argc, argv):
-    global STOP
+    global STOP, archive, DRY_RUN
     STOP = False
     
     # logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO, stream=sys.stdout)
@@ -67,9 +30,7 @@ def main(argc, argv):
     
     # Defaults
     Output = StandardOutput
-    CHUNK_SIZE = 50
     ARCHIVE_FOLDER = "/Archive"
-    MULTIPROCESSING = True
     CHECK_ARCHIVE = False
     DRY_RUN = False
     RECURSIVE = False
@@ -85,108 +46,59 @@ def main(argc, argv):
         USER_MAILDIR = clean_path("~/Maildir")
     
     # Parse arguments
-    help_text = "usage: %s [opts] maildir ...\n" % PROGRAM
-    short_args = ""
-    long_args = []
-    args = (
-    #   short   long            args    help
-        ("h",   "help",         False,  "Show help.\n"),
-        
-        ("q",   "quiet",        False,  "No output."),
-        ("v",   "verbose",      False,  "Show per-message progress and status."),
-        ("d",   "debug",        False,  "Show everything. Everything.\n"),
-        
-        ("m",   "maildir",      True,   "Path to maildir to import messages into (will create if nonexistant; default: %s)." % USER_MAILDIR),
-        ("a",   "archive",      True,   "Folder in maildir to use as an archive (will create if nonexistant; default: %s)." % ARCHIVE_FOLDER),
-        
-        ("n",   "dry-run",      False,  "Simulate import."),
-        ("1",   "one",          False,  "Disable multiprocessing."),
-        ("r",   "recursive",    False,  "Also import subfolders.\n"),
-        
-        ("f",   "fsck",         False,  "Verify the archive and repair any issues.\n"),
-        
-        ("c",   "chunk-size",   True,   "Minimum size of a work unit (advanced; default: %d)." % CHUNK_SIZE),
-        ("l",   "fs",           False,  "Use FS layout for archive subfolders instead of Maildir++"),
-    )
+    parser = argparse.ArgumentParser(
+        description="archive maildirs",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+    parser.add_argument("-q", "--quiet",
+                            action="store_true", help="no output")
+    parser.add_argument("-v", "--verbose", default=0,
+                            action="count", help="show per-message progress and status")
+    parser.add_argument("-d", "--debug",
+                            action="store_true", help="show everything. everything.")
+    parser.add_argument("-m", "--maildir", default=USER_MAILDIR,
+                            help="path to maildir to import messages into (will create if nonexistant)")
+    parser.add_argument("-a", "--archive", default=ARCHIVE_FOLDER,
+                            help="folder in maildir to use as an archive (will create if nonexistant)")
+    parser.add_argument("-n", "--dry-run",
+                            action="store_true", help="simulate actions only")
+    parser.add_argument("-r", "--recursive",
+                            action="store_true", help="also import all subfolders")
+    parser.add_argument("-l", "--fs",
+                            action="store_true", help="use FS layout for archive subfolders instead of Maildir++")
+    parser.add_argument("-f", "--fsck",
+                            action="store_true", help="verify and repair the archive's index")
+    parser.add_argument("maildirs", nargs="+")
+
+    args = parser.parse_args()
+    logging.info(args)
     
-    # Build long and short argument ... arguments.
-    for arg in args:
-        if len(arg[3]):
-            help_text += "  -%s, --%-12s %s\n" % ( arg[0], arg[1], arg[3] )
-            
-        if arg[2]:
-            short_args += arg[0]
-            short_args += ":"
-            long_args.append(arg[1] + "=")
-        else:
-            short_args += arg[0]
-            long_args.append(arg[1])
-            
-    try:
-        (options, paths) = getopt(argv[1:], short_args, long_args)
-    except GetoptError as e:
-        logging.error("%s: %s" % (PROGRAM, e))
-        return 1
-        
-    for option, value in options:
-        logging.debug("OPTION: %r %r", option, value)
-        if option in ["-a", "--archive"]:
-            ARCHIVE_FOLDER = value
-            logging.debug("ARCHIVE_FOLDER %r", ARCHIVE_FOLDER)
-            
-        elif option in ["-m", "--maildir"]:
-            USER_MAILDIR = clean_path(value)
-            logging.debug("USER_MAILDIR %r", USER_MAILDIR)
-            
-        elif option in ["-q", "--quiet"]:
-            Output = QuietOutput
-            logging.debug("Output %r", Output)
-            if logging.getLogger().getEffectiveLevel() != logging.DEBUG:
-                logging.getLogger().setLevel(logging.WARNING)
-            
-        elif option in ["-d", "--debug"]:
-            logging.getLogger().setLevel(logging.DEBUG)
-            logging.debug("Debug output enabled.")
-            
-        elif option in ["-v", "--verbose"]:
-            Output = VerboseOutput
-            logging.debug("Output %r", Output)
-            if logging.getLogger().getEffectiveLevel() != logging.DEBUG:
-                logging.getLogger().setLevel(logging.INFO)
-            
-        elif option in ["-f", "--fsck"]:
-            CHECK_ARCHIVE = True
-            logging.debug("CHECK_ARCHIVE %r", CHECK_ARCHIVE)
-            
-        elif option in ["-n", "--dry-run"]:
-            DRY_RUN = True
-            logging.debug("DRY_RUN %r", DRY_RUN)
-            
-        elif option in ["-r", "--recursive"]:
-            RECURSIVE = True
-            logging.debug("RECURSIVE %r", RECURSIVE)
-            
-        elif option in ["-1", "--one"]:
-            MULTIPROCESSING = False
-            logging.debug("MULTIPROCESSING %r", MULTIPROCESSING)
-            
-        elif option in ["-c", "--chunk-size"]:
-            CHUNK_SIZE = int(value)
-            if CHUNK_SIZE < 1: CHUNK_SIZE = 1
-            logging.debug("CHUNK_SIZE %r", CHUNK_SIZE)
-            
-        elif option in ["--fs"]:
-            USE_FS_LAYOUT = True
-            logging.debug("USE_FS_LAYOUT %d", USE_FS_LAYOUT)
-            
-        elif option in ["-h", "--help"]:
-            logging.debug("HELP")
-            print(help_text)
-            sys.exit()
-            
+    ARCHIVE_FOLDER = args.archive
+    USER_MAILDIR = args.maildir
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug("Debug output enabled.")
+    if args.quiet:
+        Output = QuietOutput
+        logging.debug("Output %r", Output)
+        if logging.getLogger().getEffectiveLevel() != logging.DEBUG:
+            logging.getLogger().setLevel(logging.WARNING)
+    if args.verbose:
+        Output = VerboseOutput
+        logging.debug("Output %r", Output)
+        if logging.getLogger().getEffectiveLevel() != logging.DEBUG:
+            logging.getLogger().setLevel(logging.INFO)
+    CHECK_ARCHIVE = args.fsck
+    DRY_RUN = args.dry_run
+    RECURSIVE = args.recursive
+    USE_FS_LAYOUT = args.fs
+    
+    logging.debug("Archive maildir: %s", USER_MAILDIR)
+    logging.debug("Archive folder: %s", ARCHIVE_FOLDER)
+
     # Verify the given paths are Maildirs
     maildir_paths = []
-    for path in paths:
+    for path in args.maildirs:
         logging.debug("* Checking path %r", path)
         
         path = clean_path(path)
@@ -194,33 +106,38 @@ def main(argc, argv):
         logging.debug("* Path expanded to %r", path)
         
         try:
-            maildir = Maildir(path, xattr=True, fs_layout=USE_FS_LAYOUT)
+            maildir = Maildir(path, fs_layout=USE_FS_LAYOUT)
             maildir_paths.append(path)
             logging.info("+ added folder %s" % (maildir.name,))
             
             if RECURSIVE:
+                logging.debug("_ scanning children")
                 for folder in maildir.list_folders():
-                    child = maildir.get_folder(folder)
-                    maildir_paths.append(child.path)
-                    logging.info("+   added subfolder of %s: %s" % (maildir.name, child.name,))
+                    try:
+                        child = maildir.get_folder(folder)
+                        maildir_paths.append(child.path)
+                        logging.info("+   added subfolder of %s: %s" % (maildir.name, child.name,))
+                    except InvalidMaildirError as e:
+                        logging.info(e)
                     
-        except InvalidMaildirError:
-            logging.warning("%s: %s: not a maildir; skipped." % (PROGRAM, path,))
+        except InvalidMaildirError as e:
+            print(e)
+            logging.warning("%s: %s" % (PROGRAM, e.args))
             continue;
             
     # Create the archive maildir and get the direct path to it
     maildir = Maildir(USER_MAILDIR, create=True, fs_layout=USE_FS_LAYOUT)
     ARCHIVE_PATH = maildir.create_folder(ARCHIVE_FOLDER).path
     # print(maildir.path)
-    # print(ARCHIVE_FOLDER)
-    # print(ARCHIVE_PATH)
+    logging.debug("Archive folder: %s", ARCHIVE_FOLDER)
+    logging.debug("Archive path: %s", ARCHIVE_PATH)
     del maildir
     
     # Verify the DB before starting
-    archive = MailArchive(ARCHIVE_PATH, create=True, fs_layout=USE_FS_LAYOUT)
+    archive = MailArchive(ARCHIVE_PATH, create=True, lazy=True, fs_layout=USE_FS_LAYOUT)
+    archive.maildir.lazy_period = 10
     if CHECK_ARCHIVE:
         archive.check(True)
-    del archive
     
     # Import Maildirs
     if not len(maildir_paths):
@@ -234,7 +151,8 @@ def main(argc, argv):
         logging.debug("* Opening %r", path)
         
         # Open the maildir
-        source = Maildir(path, lazy=True, fs_layout=USE_FS_LAYOUT)
+        source = Maildir(path, lazy=True, xattr=True, fs_layout=USE_FS_LAYOUT)
+        source.lazy_period = 10
         
         # Gather list of messages to check.
         msgids = sorted(source.keys())
@@ -243,39 +161,36 @@ def main(argc, argv):
         logging.debug("* Found %r keys.", msgcount)
         
         with Output(name=source.name, total=msgcount) as output:
-            
-            imap_args = [(source, msgid) for msgid in msgids]
-            CHUNK_SIZE = max(CHUNK_SIZE, int(msgcount/256))
-            
-            if MULTIPROCESSING:
-                with multiprocessing.Pool(initializer=worker_init, initargs=(ARCHIVE_PATH, DRY_RUN, USE_FS_LAYOUT)) as pool:
-                    imap_results = pool.imap(process_message, imap_args, chunksize=CHUNK_SIZE)
-                    
-                    for result in imap_results:
-                        msgid, mark = result
-                        output.increment(mark)
-                        if STOP: break
-                    
-                    if not STOP:
-                        pool.close()
-                    else:
-                        pool.terminate()
-                        
-                    pool.join()
-                    
-                    del imap_args, imap_results
-            else:
-                worker_init(ARCHIVE_PATH, DRY_RUN, USE_FS_LAYOUT)
-                for args in imap_args:
-                    msgid, mark = process_message(args)
-                    output.increment(mark)
-                    if STOP: break
-                del imap_args
+            for msgid in msgids:
+                result = EXISTING
                 
+                try:
+                    msg = source[msgid]
+                except KeyError:
+                    logging.error("%s: message not found" % (msgid,))
+                    output.increment(result)
+                    continue
+                
+                try:
+                    record = archive[msg]
+                    if record.should_update(msg):
+                        if DRY_RUN:
+                            result = UPDATED
+                        else:
+                            result = archive.update_message(msg)
+                except KeyError:
+                    if DRY_RUN:
+                        result = ADDED
+                    else:
+                        result = archive.add_message(msg)
+                
+                output.increment(result)
+                if STOP: break
+        
         del source, msgids
     
     if STOP: return 1
-        
+
 def start():
     global STOP
     
