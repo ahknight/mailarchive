@@ -8,10 +8,9 @@ import argparse
 
 from maildir_lite import Maildir, InvalidMaildirError
 
-#from .archive import MailArchive, MailArchiveRecord
-#from .progress import Progress
-#from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
-from mailarchive import *
+from .archive import MailArchive, MailArchiveRecord
+from .progress import Progress
+from .outputs import QuietOutput, StandardOutput, VerboseOutput, ADDED, UPDATED, EXISTING
 
 
 def clean_path(path):
